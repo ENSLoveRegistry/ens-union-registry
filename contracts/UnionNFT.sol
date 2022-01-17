@@ -83,7 +83,7 @@ contract UnionNFT is ERC721, AccessControl, ERC721Burnable, ERC721Enumerable {
         Metadata memory nftMinted = id_to_union[tokenId];
 
         string[9] memory parts;
-        parts[0] = '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 350 350"><style>.small{font-size: 10px}.base {text-anchor: middle; dominant-baseline: central; fill: white; font-family: sans-serif; font-size: 30px}</style><rect width="100%" height="100%" fill="red" /><text x="50%" y="50%" class="base"><tspan x="20" y="20" class="small">';
+        parts[0] = '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 350 350"><style>.small{font-size: 10px}.base {text-anchor: middle; dominant-baseline: central; fill: white; font-family: sans-serif; font-size: 30px}</style><rect width="100%" height="100%" fill="#F43E5E" /><text x="50%" y="50%" class="base"><tspan x="20" y="20" class="small">';
 
         parts[1] = string(abi.encodePacked("#",toString(tokenId)));
 

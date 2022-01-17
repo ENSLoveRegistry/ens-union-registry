@@ -3,8 +3,9 @@
 pragma solidity ^0.8.4;
 
 import "./IUnionNFT.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract United {
+contract United  is ReentrancyGuard{
 
     address payable owner;
 
@@ -242,11 +243,12 @@ contract United {
         updateStatusCost = amount;
     }
 
-    // function transferOwnership(address payable newOwner) external onlyOwner {
-    //     owner = newOwner;
-    // }
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0));
+        owner = payable(newOwner);
+    }
 
-    function withdraw() external onlyOwner{
+    function withdraw() external  onlyOwner nonReentrant{
         uint amount = address(this).balance;
         (bool success, ) = msg.sender.call{value: amount}("");
         require(success, "Failed to send Ether");
