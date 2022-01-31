@@ -8,25 +8,25 @@ const hre = require("hardhat");
 async function main() {
   console.log("Deploying process");
 
-  const United = await hre.ethers.getContractFactory("United");
-  console.log("got the United factory");
-  const united = await United.deploy();
-  console.log("united deployed");
+  const ENSTogether = await hre.ethers.getContractFactory("ENSTogether");
+  console.log("got the ENSTogether factory");
+  const enstogether = await ENSTogether.deploy();
+  console.log("enstogether deployed");
 
-  await united.deployed();
-  console.log("United deployed to:", united.address);
+  await enstogether.deployed();
+  console.log("ENSTogether deployed to:", enstogether.address);
 
-  const UnionNFT = await hre.ethers.getContractFactory("UnionNFT");
-  console.log("got the UnionNFT factory");
+  const ENSTogetherNFT = await hre.ethers.getContractFactory("ENSTogetherNFT");
+  console.log("got the ENSTogetherNFT factory");
 
-  const unionNFT = await UnionNFT.deploy(united.address);
-  console.log("unionNFT deployed");
+  const enstogetherNft = await ENSTogetherNFT.deploy(enstogether.address);
+  console.log("enstogetherNft deployed");
 
-  await unionNFT.deployed();
-  console.log("UnionNFT deployed to:", unionNFT.address);
+  await enstogetherNft.deployed();
+  console.log("ENSTogetherNFT deployed to:", enstogetherNft.address);
 
-  const receipt = await united.deployTransaction.wait();
-  const receiptNFT = await unionNFT.deployTransaction.wait();
+  const receipt = await enstogether.deployTransaction.wait();
+  const receiptNFT = await enstogetherNft.deployTransaction.wait();
   console.log("gasUsed united", receipt.gasUsed._hex);
   console.log("gasUsed unionNFT", receiptNFT.gasUsed._hex);
 }
