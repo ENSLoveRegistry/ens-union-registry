@@ -29,7 +29,11 @@ module.exports = {
   },
   defaultNetwork: "hardhat",
   networks: {
-    hardhat: {},
+    hardhat: {
+      forking: {
+        url: "https://eth-mainnet.alchemyapi.io/v2/OZYrTiuf99NjUsn4PJ_oTvAXPSlg7LjY",
+      },
+    },
     goerli: {
       url: process.env.ALCHEMY_GOERLI_API,
       accounts: [`${process.env.GOERLY_PRIVATE_KEY}`],

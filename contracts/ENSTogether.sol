@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity ^0.8.7;
-
+import "hardhat/console.sol";
 import "./IENSTogetherNFT.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+interface IDefaultResolver {
+    function name(bytes32 node) external view returns (string memory);
+}
 
-contract ENSTogether is ReentrancyGuard, Ownable {
+interface IReverseRegistrar {
+    function node(address addr) external view returns (bytes32);
+    function defaultResolver() external view returns (IDefaultResolver);
+}
+
+    contract ENSTogether is ReentrancyGuard, Ownable {
+  
+    IReverseRegistrar ensReverseRegistrar;
 
     address public nftContract; 
     uint public cost = 0.01 ether;
@@ -25,8 +35,8 @@ contract ENSTogether is ReentrancyGuard, Ownable {
 
     struct Union {
         address to;
-        address from;
         uint8 proposalStatus;
+        address from;
         uint8 relationshipStatus;
         uint proposalNumber;
         uint registryNumber;
@@ -36,7 +46,9 @@ contract ENSTogether is ReentrancyGuard, Ownable {
     
     mapping(address => Union) public unionWith;
 
-    constructor(){}
+    constructor(address ensReverseRegistrar_) {
+        ensReverseRegistrar = IReverseRegistrar(ensReverseRegistrar_);
+    }
 
     //PROPOSAL EVENTS
     event ProposalSubmitted(address indexed to, address indexed from, uint indexed _status );
@@ -53,9 +65,18 @@ contract ENSTogether is ReentrancyGuard, Ownable {
     //BURNED
     event Burned(uint id, bool);
 
-    function propose(address _to) external payable{
+   function lookupENSName(address addr) internal view returns (string memory) {
+        bytes32 node = ensReverseRegistrar.node(addr);
+        return ensReverseRegistrar.defaultResolver().name(node);
+    }
+
+    function propose( address _to) external payable {
         require(msg.value >= cost, "Insufficient amount");
         require(_to != msg.sender, "Can't registry with yourself as a partner");
+        string memory ensFrom = lookupENSName(msg.sender);
+        string memory ensTo = lookupENSName(_to);
+        require(bytes(ensFrom).length > 0, "Sender doesn't have ENS name");    
+        require(bytes(ensTo).length > 0, "The address you're proposing to doesnt have ENS name");    
         //revert if msg.sender is already united 
         require(unionWith[msg.sender].relationshipStatus == uint8(Status.NOTHING) || unionWith[msg.sender].relationshipStatus == uint8(Status.SEPARATED), "You are already united");
         //avoid proposals to a person already in a relationship
@@ -86,6 +107,11 @@ contract ENSTogether is ReentrancyGuard, Ownable {
         require(unionWith[msg.sender].to == msg.sender, "You cant respond your own proposal, that's scary");
         //Proposal status must be "PENDING"
         require(unionWith[msg.sender].proposalStatus == uint8(Proposal.PENDING), "This proposal has already been responded");
+        //Checking the ens names provided against ens registrar
+        string memory ensFrom = lookupENSName(unionWith[msg.sender].from);
+        string memory ensTo = lookupENSName(unionWith[msg.sender].to);
+        require(keccak256(abi.encodePacked(ens1)) == keccak256(abi.encodePacked(ensFrom)) || keccak256(abi.encodePacked(ens1)) == keccak256(abi.encodePacked(ensTo)) , "One of the ENS names doesn't match with addresses involved");
+        require(keccak256(abi.encodePacked(ens2)) == keccak256(abi.encodePacked(ensFrom)) || keccak256(abi.encodePacked(ens2)) == keccak256(abi.encodePacked(ensTo)) , "One of the ENS names doesn't match with addresses involved");      
         //instance of the proposal
         Union memory acceptOrDecline = unionWith[msg.sender];
          //get the addresses involved
