@@ -10,7 +10,9 @@ async function main() {
 
   const ENSTogether = await hre.ethers.getContractFactory("ENSTogether");
   console.log("got the ENSTogether factory");
-  const enstogether = await ENSTogether.deploy();
+  const enstogether = await ENSTogether.deploy(
+    "0x084b1c3c81545d370f3634392de611caabff8148"
+  );
   console.log("enstogether deployed");
 
   await enstogether.deployed();
@@ -27,8 +29,8 @@ async function main() {
 
   const receipt = await enstogether.deployTransaction.wait();
   const receiptNFT = await enstogetherNft.deployTransaction.wait();
-  console.log("gasUsed united", receipt.gasUsed._hex);
-  console.log("gasUsed unionNFT", receiptNFT.gasUsed._hex);
+  console.log("gasUsed enstogether", receipt.gasUsed._hex);
+  console.log("gasUsed enstogetherNft", receiptNFT.gasUsed._hex);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
