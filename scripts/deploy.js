@@ -10,6 +10,7 @@ async function main() {
 
   const ENSTogether = await hre.ethers.getContractFactory("ENSTogether");
   console.log("got the ENSTogether factory");
+  //Pass the Ens ReverseRegistar contract address to constructor
   const enstogether = await ENSTogether.deploy(
     "0x084b1c3c81545d370f3634392de611caabff8148"
   );
