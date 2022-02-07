@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract ENSTogetherNFT is ERC721, AccessControl, ERC721Burnable, ERC721Enumerable {
      bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    using Counters for Counters.Counter;
-
-    Counters.Counter private _tokenIdCounter;
+    uint private _tokenIdCounter;
 
     struct Metadata {
         uint id;
@@ -25,23 +22,21 @@ contract ENSTogetherNFT is ERC721, AccessControl, ERC721Burnable, ERC721Enumerab
         address to;
     }
 
-  mapping(address => Metadata) address_to_union;
-  mapping(uint256 => Metadata) id_to_union;
+      mapping(uint256 => Metadata) public id_to_union;
 
-
-     constructor(address minter ) ERC721("union token", "UTK") {
+     constructor(address minter ) ERC721("ENSTogether", "ENST") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, minter);
     }
 
     function mint(address from, address to,  string calldata ens1,string calldata ens2) external onlyRole(MINTER_ROLE) {
-         uint256 tokenId = _tokenIdCounter.current();
-        _tokenIdCounter.increment(); 
+         uint256 tokenId = _tokenIdCounter;
+        _tokenIdCounter++;
         (uint16 now_year, uint8 now_month, uint8 now_day) = timestampToDate(block.timestamp);
         id_to_union[tokenId] = Metadata(tokenId, now_day, now_month, now_year, ens1, ens2, from, to);
         _safeMint(to,tokenId);
         uint256 nextTokenId = tokenId + 1;
-        _tokenIdCounter.increment(); 
+        _tokenIdCounter++;
         id_to_union[nextTokenId] = Metadata(tokenId,now_day, now_month, now_year, ens1, ens2, from, to);
         _safeMint(from,nextTokenId);
     }
@@ -62,21 +57,6 @@ contract ENSTogetherNFT is ERC721, AccessControl, ERC721Burnable, ERC721Enumerab
         }
         return tokenIds;
   }
-
-    function getTokenById(uint256 tokenId) external view returns (uint8 day, uint8 month, uint16 year, string memory lover1, string memory lover2, address from, address to) {
-        require(_exists(tokenId), "token not minted");
-        Metadata memory nftMinted = id_to_union[tokenId];
-        day = nftMinted.day;
-        month= nftMinted.month;
-        year= nftMinted.year;
-        lover1=   nftMinted.ens1;
-        lover2 =  nftMinted.ens2;
-        from= nftMinted.from;
-        to = nftMinted.to;
-    }
-
-
-    /// @notice heavily inspired from Loot contract
 
     function tokenURI(uint tokenId) override public view returns (string memory) {
         require(_exists(tokenId), "token not minted");

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity ^0.8.7;
-import "hardhat/console.sol";
+
 import "./IENSTogetherNFT.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -9,14 +9,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 interface IDefaultResolver {
     function name(bytes32 node) external view returns (string memory);
 }
-
 interface IReverseRegistrar {
     function node(address addr) external view returns (bytes32);
     function defaultResolver() external view returns (IDefaultResolver);
 }
 
-    contract ENSTogether is ReentrancyGuard, Ownable {
-  
+
+contract ENSTogether is ReentrancyGuard, Ownable {
     IReverseRegistrar ensReverseRegistrar;
 
     address public nftContract; 
@@ -51,41 +50,36 @@ interface IReverseRegistrar {
     }
 
     //PROPOSAL EVENTS
-    event ProposalSubmitted(address indexed to, address indexed from, uint indexed _status );
+    event ProposalSubmitted(address indexed to, address indexed from);
     event ProposalResponded(address indexed to, address indexed from, uint indexed _status );
     event ProposalCancelled(address indexed to, address indexed from);
     //UNION EVENTS
-    event GotUnited(address indexed from, address indexed to, uint  _status,
-    uint indexed _timestamp, uint  _registrationNumber);
+    event GotUnited(address indexed from, address indexed to, uint indexed _timestamp,  uint  _registrationNumber);
     event UnionStatusUpdated(address indexed from, address indexed to, uint _status,
-    uint indexed _timestamp, uint  _registrationNumber);
+    uint indexed _timestamp);
     //ERRORS
-    error SenderAlreadyPending();
-    error ReceiverAlreadyPending();
+    error SenderPendingProposal();
+    error ReceiverPendingProposal();
     //BURNED
     event Burned(uint id, bool);
-
-   function lookupENSName(address addr) internal view returns (string memory) {
-        bytes32 node = ensReverseRegistrar.node(addr);
-        return ensReverseRegistrar.defaultResolver().name(node);
-    }
 
     function propose( address _to) external payable {
         require(msg.value >= cost, "Insufficient amount");
         require(_to != msg.sender, "Can't registry with yourself as a partner");
-        string memory ensFrom = lookupENSName(msg.sender);
-        string memory ensTo = lookupENSName(_to);
-        require(bytes(ensFrom).length > 0, "Sender doesn't have ENS name");    
-        require(bytes(ensTo).length > 0, "The address you're proposing to doesnt have ENS name");    
         //revert if msg.sender is already united 
         require(unionWith[msg.sender].relationshipStatus == uint8(Status.NOTHING) || unionWith[msg.sender].relationshipStatus == uint8(Status.SEPARATED), "You are already united");
         //avoid proposals to a person already in a relationship
         require(unionWith[_to].relationshipStatus == uint8(Status.NOTHING) || unionWith[_to].expired == true , "This address is already in a relationship");
-        // Revert if sender sent a proposal and its not expired or receiver has a pending unexpired proposal 
+        //Check if both addresses have an ENS name
+        string memory ensFrom = lookupENSName(msg.sender);
+        string memory ensTo = lookupENSName(_to);
+        require(bytes(ensFrom).length > 0, "Sender doesn't have ENS name");
+        require(bytes(ensTo).length > 0, "The address you're proposing to doesnt have ENS name");
+        // Revert if sender sent a proposal and its not expired or receiver has a pending not expired proposal 
         if(unionWith[msg.sender].to != address(0) && block.timestamp < unionWith[msg.sender].createdAt + timeToRespond && unionWith[msg.sender].expired == false){
-         revert SenderAlreadyPending();
+         revert SenderPendingProposal();
         } else if (unionWith[_to].proposalStatus == uint8(Proposal.PENDING) && block.timestamp < unionWith[_to].createdAt + timeToRespond){
-         revert ReceiverAlreadyPending();
+         revert ReceiverPendingProposal();
         } else  {
         Union memory request;
         request.to = _to;
@@ -97,10 +91,18 @@ interface IReverseRegistrar {
         unionWith[msg.sender]= request;
         proposalsCounter++;
         }
-        emit ProposalSubmitted(_to, msg.sender,  uint8(Proposal.PENDING));
+        emit ProposalSubmitted(_to, msg.sender);
     }
 
+    function lookupENSName(address addr) public view returns (string memory) {
+        bytes32 node = ensReverseRegistrar.node(addr);
+        return ensReverseRegistrar.defaultResolver().name(node);
+    }
+
+
     function respondToProposal(Proposal response, string calldata ens1, string calldata ens2) external payable{
+        //Response shouldnt be NOTHING or PENDING
+        require(uint8(response) != uint8(Proposal.NOTHING) && uint8(response) != uint8(Proposal.PENDING), "Response not valid");
         //shouldnt be expired
         require(block.timestamp < unionWith[msg.sender].createdAt + timeToRespond, "Proposal expired");
         //Only the address who was invited to be united should respond to the proposal.
@@ -110,14 +112,15 @@ interface IReverseRegistrar {
         //Checking the ens names provided against ens registrar
         string memory ensFrom = lookupENSName(unionWith[msg.sender].from);
         string memory ensTo = lookupENSName(unionWith[msg.sender].to);
-        require(keccak256(abi.encodePacked(ens1)) == keccak256(abi.encodePacked(ensFrom)) || keccak256(abi.encodePacked(ens1)) == keccak256(abi.encodePacked(ensTo)) , "One of the ENS names doesn't match with addresses involved");
-        require(keccak256(abi.encodePacked(ens2)) == keccak256(abi.encodePacked(ensFrom)) || keccak256(abi.encodePacked(ens2)) == keccak256(abi.encodePacked(ensTo)) , "One of the ENS names doesn't match with addresses involved");      
-        //instance of the proposal
+        require(keccak256(abi.encodePacked(ens1)) == keccak256(abi.encodePacked(ensFrom)) || keccak256(abi.encodePacked(ens1)) == keccak256(abi.encodePacked(ensTo)) , "First ENS name doesn't match with addresses involved");
+        require(keccak256(abi.encodePacked(ens2)) == keccak256(abi.encodePacked(ensFrom)) || keccak256(abi.encodePacked(ens2)) == keccak256(abi.encodePacked(ensTo)) , "Second ENS name doesn't match with addresses involved");
+        // //instance of the proposal
         Union memory acceptOrDecline = unionWith[msg.sender];
          //get the addresses involved
         address from = acceptOrDecline.from;
         address to = acceptOrDecline.to;
-        //if declined cancel and reset proposal
+        acceptOrDecline.createdAt = block.timestamp;
+        //if declined -> cancel and reset proposal
          if(uint8(response) == 3){
             acceptOrDecline.expired = true;
             acceptOrDecline.proposalStatus = uint8(Proposal.DECLINED);
@@ -128,12 +131,13 @@ interface IReverseRegistrar {
         }
         //accept scenario
         if(uint8(response) == 2){
-        acceptOrDecline.proposalStatus = uint8(Proposal.ACCEPTED);
-        acceptOrDecline.relationshipStatus = uint8(Status.TOGETHER);
-        acceptOrDecline.createdAt = block.timestamp;
-        unionWith[to] = acceptOrDecline;
-        unionWith[from] = acceptOrDecline;
-        getUnited(from, to, ens1, ens2 );
+            acceptOrDecline.proposalStatus = uint8(Proposal.ACCEPTED);
+            acceptOrDecline.relationshipStatus = uint8(Status.TOGETHER);
+            acceptOrDecline.registryNumber= registryCounter;
+            unionWith[to] = acceptOrDecline;
+            unionWith[from] = acceptOrDecline;
+            registryCounter++;
+            getUnited(from, to, ens1, ens2 );
         } emit ProposalResponded(to, from, uint8(Proposal.ACCEPTED));
     }
     
@@ -148,18 +152,13 @@ interface IReverseRegistrar {
         emit ProposalCancelled(to, from);
     }
 
-    
-   function getUnited( address _from , address _to, string calldata ens1, string calldata ens2)  internal {
-        registryCounter++;
+    function getUnited( address _from , address _to, string calldata ens1, string calldata ens2)  internal  {
         IENSTogetherNFT(nftContract).mint(_from, _to, ens1, ens2);
-        emit GotUnited(_from,  msg.sender, uint8(relationshipStatus), block.timestamp, registryCounter - 1 );
+        emit GotUnited(_from,  msg.sender, block.timestamp, registryCounter - 1 );
    }
 
     function updateUnion(Status newStatus) external payable {
         require(msg.value >= updateStatusCost, "Insufficient amount");
-        //only people in that union can modify the status
-        require(unionWith[msg.sender].to == msg.sender ||
-         unionWith[msg.sender].from == msg.sender, "You're address doesn't exist on the union registry" );
          //once separated cannot modify status
          require(unionWith[msg.sender].relationshipStatus != uint8(Status.SEPARATED), "You are separated, make another proposal");
         Union memory unionUpdated = unionWith[msg.sender];
@@ -168,27 +167,26 @@ interface IReverseRegistrar {
         unionUpdated.relationshipStatus = uint8(newStatus);
         unionUpdated.createdAt = block.timestamp;
         if(uint8(newStatus) == 3){
-            //function to clear proposals made and free users for make new ones.
-            unionUpdated.expired = true;
-            cancelOrResetProposal();
+           unionUpdated.proposalStatus = uint8(Proposal.DECLINED);
+           unionUpdated.expired = true;
         }
         unionWith[to] = unionUpdated;
         unionWith[from] = unionUpdated;
-
-        emit UnionStatusUpdated(from, to, uint(newStatus), block.timestamp, unionUpdated.registryNumber);
+        emit UnionStatusUpdated(from, to, uint(newStatus), block.timestamp);
     }
 
 
+    //Interfacing with ENSTogetherNFT contract
     function getTokenUri(uint256 _tokenId) external view returns(string memory){
-       (string memory uri) = IENSTogetherNFT(nftContract).tokenURI(_tokenId);
-       return uri;
+        (string memory uri) = IENSTogetherNFT(nftContract).tokenURI(_tokenId);
+        return uri;
     }
 
     function getTokenIDS(address _add) external view returns (uint[] memory){
         (uint[] memory ids)=  IENSTogetherNFT(nftContract).ownedNFTS(_add);
         return ids;
     }
-   
+
     function burn(uint256 tokenId) external {
          IENSTogetherNFT(nftContract).burn(tokenId, msg.sender);
          emit Burned(tokenId, true);
