@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, waffle } = require("hardhat");
 const chai = require("chai");
 const assertArrays = require("chai-arrays");
 chai.use(assertArrays);
@@ -15,6 +15,7 @@ describe("ENSTogether", () => {
   beforeEach(async () => {
     //GET RANDOM SIGNERS FROM MAINNET FORK
     [cacho, marta] = await ethers.getSigners();
+
     //DEPLOY ENSTOGETHER CONTRACT
     const ENSTogether = await ethers.getContractFactory("ENSTogether");
     enstogether = await ENSTogether.deploy(
@@ -37,6 +38,11 @@ describe("ENSTogether", () => {
     proposal = await enstogether.connect(pedroSigner).propose(juanaAdd, {
       value: ethers.utils.parseEther("0.01"),
     });
+    //GET CONTRACT BALANCE
+    provider = waffle.provider;
+    contractBalance = await provider.getBalance(enstogether.address);
+    ownerOfTheContract = await enstogether.connect(pedroSigner).owner();
+    cachobalance = await provider.getBalance(cacho.address);
   });
 
   describe("Deployment", () => {
@@ -155,7 +161,7 @@ describe("ENSTogether", () => {
         await expect(
           enstogether
             .connect(pedroSigner)
-            .respondToProposal(2, "coco.eth", "cosmo.eth")
+            .respondToProposal(2, "klmlkm.eth", "dhbjhme.eth")
         ).to.be.revertedWith(
           "You cant respond your own proposal, that's scary"
         );
@@ -212,17 +218,18 @@ describe("ENSTogether", () => {
           .connect(juanaSigner)
           .respondToProposal(2, "nick.eth", "dame.eth");
         //ts returns an object with the timestamp
-        const ts = await ethers.provider.getBlock(receipt.blockNumber);
         // ts.timestamp +1 because respondToProposal function calls another function that
         // emits the GotUnited event and gets mined on the next block
         //this is for testing purposes only bc on solidity you get the timestamp directly within the event
+        const ts = await ethers.provider.getBlock(receipt.blockNumber);
+        const unionD = await enstogether.unionWith(juanaSigner.address);
         await expect(receipt)
           .to.emit(enstogether, "GotUnited")
           .withArgs(
             pedroSigner.address,
             juanaSigner.address,
             ts.timestamp + 1,
-            registrycount
+            unionD.registryNumber
           );
         //registryCount should be 1 after
         const registrycountAfterAccepting = await enstogether.registryCounter();
@@ -309,7 +316,7 @@ describe("ENSTogether", () => {
         expect(unionData.expired).to.equal(true);
       });
     });
-    describe("NFT generation", () => {
+    describe("NFT creation when United", () => {
       beforeEach(async () => {
         await ethers.provider.send("hardhat_impersonateAccount", [juanaAdd]);
         juanaSigner = await ethers.getSigner(juanaAdd);
@@ -338,6 +345,51 @@ describe("ENSTogether", () => {
         // console.log("tokenUri", tokenUriReceiver);
         const tokenUriSender = await enstogether.getTokenUri(tokenIDsSender[0]);
         // console.log("tokenUri", tokenUriSender);
+      });
+    });
+    describe("OnlyOwner functions", () => {
+      it("modifies time to respond", async () => {
+        await enstogether.modifyTimeToRespond(10 * 60);
+        const changedTTR = await enstogether.timeToRespond();
+        expect(changedTTR).to.equal(10 * 60);
+      });
+      it("modifies proposal cost", async () => {
+        await enstogether.modifyProposalCost(ethers.utils.parseEther("0.02"));
+        const changedCost = await enstogether.cost();
+        expect(changedCost).to.equal(ethers.utils.parseEther("0.02"));
+      });
+      it("modifies updateStatus cost", async () => {
+        await enstogether.modifyStatusUpdateCost(ethers.utils.parseEther("1"));
+        const changedUCost = await enstogether.updateStatusCost();
+        expect(changedUCost).to.equal(ethers.utils.parseEther("1"));
+      });
+      it("Withdraws funds", async () => {
+        let ownerBF = await provider.getBalance(cacho.address);
+        await enstogether.withdraw();
+        let contractBalanceAW = await provider.getBalance(enstogether.address);
+        let ownerAF = await provider.getBalance(cacho.address);
+        expect(contractBalanceAW).to.equal(0);
+        expect(ownerAF).to.be.gt(ownerBF);
+      });
+      it("Fails if not the owner call the above functions", async () => {
+        await ethers.provider.send("hardhat_impersonateAccount", [juanaAdd]);
+        juanaSigner = await ethers.getSigner(juanaAdd);
+        await expect(
+          enstogether.connect(juanaSigner.address).modifyTimeToRespond(10 * 60)
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(
+          enstogether
+            .connect(juanaSigner.address)
+            .modifyProposalCost(ethers.utils.parseEther("0.02"))
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(
+          enstogether
+            .connect(juanaSigner.address)
+            .modifyStatusUpdateCost(ethers.utils.parseEther("1"))
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(
+          enstogether.connect(juanaSigner.address).withdraw()
+        ).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
   });
